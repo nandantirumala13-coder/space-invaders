@@ -1,0 +1,270 @@
+import pygame
+import random
+import math
+
+pygame.init()
+
+WIDTH, HEIGHT = 900, 650
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Space Invaders")
+
+clock = pygame.time.Clock()
+font = pygame.font.SysFont("Arial", 26, bold=True)
+big_font = pygame.font.SysFont("Arial", 64, bold=True)
+
+WHITE = (255, 255, 255)
+CYAN = (0, 220, 255)
+RED = (255, 65, 85)
+PURPLE = (170, 90, 255)
+BLACK = (8, 10, 28)
+
+
+stars = [
+    [random.randrange(WIDTH), random.randrange(HEIGHT),
+     random.choice([1, 2, 3])]
+    for i in range(100)      
+]
+
+
+player = pygame.Rect(WIDTH // 2 - 22, HEIGHT - 85, 44, 44)
+bullets = []
+enemies = []
+particles = []
+
+
+score = 0
+health = 3
+game_over = False
+spawn_timer = 0
+shoot_timer = 0
+
+
+
+def draw_text(text, font_obj, color, x, y, center=False):
+    image = font_obj.render(text, True, color)
+    rect = image.get_rect()
+    if center:
+        rect.center = (x, y)
+    else:
+        rect.topleft = (x, y)
+    screen.blit(image, rect) 
+
+
+
+
+def reset_game():
+    global player, bullets, enemies, particles
+    global score, health, game_over, spawn_timer, shoot_timer
+
+
+    player = pygame.Rect(WIDTH // 2 - 22, HEIGHT - 85, 44, 44)
+    bullets = []
+    enemies = []
+    particles = []
+    score = 0
+    health = 3
+    game_over = False
+    spawn_timer = 0
+    shoot_timer = 0
+
+
+
+running = True
+
+
+while running:
+    dt = clock.tick(60) / 1000
+    screen.fill(BLACK)
+
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
+            if game_over and event.key == pygame.K_r:
+                reset_game()
+
+
+
+    for star in stars:
+        star[1] += star[2] * 45 * dt  
+        if star[1] > HEIGHT:
+            star[0] = random.randrange(WIDTH)
+            star[1] = 0
+        pygame.draw.circle(
+            screen, (100, 120, 180),
+            (star[0], int(star[1])), star[2]
+        )  
+
+
+    if not game_over:
+        keys = pygame.key.get_pressed()
+        speed = 340 * dt  
+
+
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            player.x -= int(speed)
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            player.x += int(speed)
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            player.y -= int(speed)
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            player.y += int(speed)
+
+
+        player.clamp_ip(screen.get_rect())   
+
+
+
+        shoot_timer -= dt 
+        if keys[pygame.K_SPACE] and shoot_timer <= 0:
+            bullets.append(
+                pygame.Rect(player.centerx - 4, player.top - 15, 8, 20)
+            )  
+            shoot_timer -=dt
+            if spawn_timer <= 0:
+                size = random.randint(28, 44)
+                enemies.append({
+                    "rect": pygame.Rect(
+                        random.randint(0, WIDTH - size), -size, size, size
+                    ),
+                    "speed": random.randint(100, 170) + score * 1.5     
+                }) 
+                spawn_timer = max(0.25, 0.85 - score * 0.003)
+
+
+
+            for bullet in bullets[:]:
+                bullet.y -= int(600 * dt)
+                if bullet.bottom < 0:
+                    bullets.remove(bullet)
+
+
+
+            for enemy in enemies[:]:
+                rect = enemy["rect"]
+                rect.y += int(enemy["speed"] * dt)
+
+
+                if rect.colliderect(player):
+                    enemies.remove(enemy)
+                    health -= 1
+                    if health <= 0:
+                        game_over = True
+                    continue
+
+
+                if rect.top > HEIGHT:
+                    enemies.remove(enemy)
+                    health -=1
+                    if health <=- 0:
+                        game_over = True
+                    continue 
+
+
+                for bullet in bullets[:]:
+                    if rect.colliderect(bullet):
+                        enemies.remove(enemy)
+                        bullets.remove(bullet)
+                        score += 10
+
+
+                        for _ in range(8):
+                            particles.append([
+                                rect.centerx, rect.centery,
+                                random.uniform(-140, 140),
+                                random.uniform(-140, 140), 0.45
+                            ])   
+                        break 
+            for p in particles[:]:
+                p[0] += p[2] * dt
+                p[1] += p[3] * dt
+                p[4] -= dt
+                if p[4] <= 0:
+                    particles.remove(p)
+                else:
+                    pygame.draw.circle(
+                        screen, PURPLE,
+                        (int(p[0]), int(p[1])), 3
+                    )  
+
+
+
+            points = [
+                (player.centerx, player.top),
+                (player.left, player.bottom),
+                (player.centerx, player.bottom -10),
+                (player.right, player.bottom)
+            ] 
+            pygame.draw.polygon(screen, CYAN, points)
+            pygame.draw.polygon(screen, WHITE, points, 2)
+
+
+
+            for bullet in bullets:
+                pygame.draw.rect(screen, CYAN, bullet, border_radius=4)
+                pygame.draw.rect(
+                    screen, WHITE,
+                    (bullet.x + 2, bullet.y, 4, bullet.height)
+                )   
+
+
+            for enemy in enemies:
+                rect = enemy["rect"]
+                pygame.draw.rect(screen, RED, rect, border_radius=8)  
+                pygame.draw.rect(screen, WHITE, rect, 2, border_radius=8)
+                pygame.draw.circle(
+                    screen, BLACK,
+                    (rect.centerx -7, rect.centery - 3), 3
+                )  
+                pygame.draw.circle(
+                    screen, BLACK,
+                    (rect.centerx +7, rect.centery -3), 3
+                )
+
+
+        pygame.draw.line(screen, PURPLE, (0, 52), (WIDTH, 52), 2)
+        draw_text(f"SCORE: {score}", font, WHITE, 20, 14)
+        draw_text(f"HEALTH: {health}", font, RED, WIDTH - 155, 14)
+
+
+        if game_over:
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 190))
+            screen.blit(overlay, (0, 0))
+
+
+            draw_text(
+                "GAME OVER", big_font, RED,
+                WIDTH // 2, HEIGHT // 2, True
+            )
+            draw_text(
+                f"Final Score: {score}", font, WHITE,
+                WIDTH // 2, HEIGHT // 2, True
+            )
+            draw_text(
+                "Press R to restart", font, CYAN,
+                WIDTH // 2, HEIGHT // 2 + 50, True
+            )
+
+
+        pygame.display.flip()
+
+
+pygame.quit()
+
+
+                
+                
+
+               
+
+                  
+                
+                                                   
+
+        
